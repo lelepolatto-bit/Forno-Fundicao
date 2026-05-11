@@ -1,29 +1,28 @@
 # Forno de Fundição Programável com ATmega328P
 
-Projeto didático de um forno de fundição programável utilizando ATmega328P, LCD 16x2, botões físicos, UART, ADC, Timer1, máquina de estados, LEDs de sinalização, emergência e controle de aquecimento com soft starter.
+   Projeto de um forno de fundição programável com ATmega328P. O sistema permite selecionar perfis de fundição para Alumínio e Latão, configurar um modo Personalizado, operar em Modo Manual com potenciômetro, controlar uma resistência com soft starter, monitorar temperatura via ADC, exibir dados no LCD 16x2 e no terminal serial, além de contar com LEDs de sinalização e botão de emergência. O funcionamento é organizado por máquina de estados e simulado no Proteus.
 
 ## Objetivo
 
-O objetivo do projeto é simular o controle de um forno de fundição em ambiente didático. O sistema permite selecionar perfis de material, configurar tempo de patamar, ler temperatura por ADC, usar modo manual por potenciômetro, acompanhar o estado pelo LCD/UART e interromper o processo por emergência física.
+   O objetivo do projeto é simular o controle de um forno de fundição em ambiente didático. O sistema permite selecionar perfis de material, configurar tempo de patamar, ler temperatura por ADC, usar modo manual por potenciômetro, acompanhar o estado pelo LCD/UART e interromper o processo por emergência física.
 
 ## Funcionalidades
 
-- Seleção de perfil
-- Alumínio
-- Latão
-- Personalizado
-- Modo manual
-- LCD 16x2
-- Botões físicos
-- UART
-- ADC
-- Timer1
-- Máquina de estados
-- Soft starter
-- Resfriamento natural
-- Emergência
-- LEDs de sinalização
-- Simulação no Proteus
+- Seleção de perfis de operação: Alumínio, Latão, Personalizado e Modo Manual
+- Perfis pré-configurados com temperaturas reais de fundição
+- Modo Personalizado com ajuste da temperatura alvo e tempo de patamar
+- Modo Manual com controle proporcional da resistência por potenciômetro
+- Leitura de temperatura por ADC, com sensor conectado ao pino A3
+- Exibição de informações em display LCD 16x2
+- Controle por botões físicos: Mais, Menos, Enter, Voltar e Emergência
+- Comunicação UART com envio do modo atual, temperatura, sensor e estado da resistência
+- Temporização com Timer1, sem uso de delays longos
+- Máquina de estados para controlar as etapas do processo
+- Acionamento da resistência com soft starter por software
+- Resfriamento natural após o tempo de patamar ou saída do modo manual
+- Sistema de emergência com travamento até confirmação por Enter
+- LEDs de sinalização para aquecimento, finalizado, resfriamento e emergência
+- Simulação completa no Proteus
 
 ## Perfis disponíveis
 
@@ -36,18 +35,22 @@ O objetivo do projeto é simular o controle de um forno de fundição em ambient
 
 ## Funcionamento geral
 
-1. Sistema inicia.
-2. Usuário seleciona perfil.
-3. Se for Alumínio ou Latão, usa temperatura pré-configurada.
-4. Se for Personalizado, usuário ajusta temperatura alvo.
-5. Usuário ajusta tempo de patamar.
-6. Sistema confirma início.
-7. Executa pré-aquecimento.
-8. Executa aquecimento.
-9. Entra em patamar.
-10. Entra em resfriamento natural.
-11. Finaliza.
-12. Emergência pode interromper o processo.
+O funcionamento do forno é organizado por uma máquina de estados. Ao iniciar, o sistema exibe uma mensagem de boas-vindas no LCD e, em seguida, entra na etapa de configuração.
+
+A sequência principal do processo é:
+
+   1. O sistema inicia e exibe a tela inicial.
+   2. O usuário seleciona o modo de operação: Alumínio, Latão, Personalizado ou Modo Manual.
+   3. Nos perfis Alumínio e Latão, a temperatura alvo já é pré-configurada.
+   4. No modo Personalizado, o usuário ajusta a temperatura alvo de 50 em 50°C.
+   5. O usuário define o tempo de patamar, ajustado de 10 em 10 segundos.
+   6. O sistema solicita a confirmação de início.
+   7. Após a confirmação, o forno entra em pré-aquecimento.
+   8. Em seguida, inicia o aquecimento até atingir a temperatura alvo ou finalizar o tempo fixo de aquecimento.
+   9. Ao entrar no patamar, o sistema mantém a temperatura próxima da temperatura alvo durante o tempo configurado.
+   10. Após o patamar, a resistência é desligada e o sistema entra em resfriamento natural.
+   11. Quando o resfriamento termina, o processo é finalizado e o LED de finalização acende.
+   12. A emergência pode interromper o processo a qualquer momento.
 
 ## Modo manual
 
@@ -55,43 +58,61 @@ O modo manual usa um potenciômetro no pino A4. Esse potenciômetro controla pro
 
 Ao apertar ENTER no modo manual, o sistema desliga a resistência e entra no resfriamento. No estado de resfriamento, ENTER volta ao início.
 
-## Sensor de temperatura
+## Modo manual
 
-O sensor de temperatura fica no pino A3, usando ADC3. O ADC lê valores de 0 a 1023. A conversão física usada no código é de 0°C a 110°C.
+No Modo Manual, a resistência é controlada proporcionalmente por um potenciômetro ligado ao pino A4. Quanto maior o valor ajustado no potenciômetro, maior o tempo de acionamento da resistência em D13.
 
-A temperatura simulada do processo é:
+Durante esse modo, o sensor de temperatura no pino A3 continua sendo lido em tempo real. A temperatura exibida no LCD e enviada pela UART corresponde ao valor do sensor multiplicado por 10.
+
+A tela do LCD mostra:
 
 ```text
-Temperatura do processo = temperatura do sensor x 10
-```
+Modo manual
+Temp: xx°C
+
+Ao pressionar ENTER no Modo Manual, a resistência é desligada e o sistema entra no estado de resfriamento. Durante o resfriamento, ao pressionar ENTER novamente, o sistema retorna ao início.
+
+## Sensor de temperatura
+
+A leitura de temperatura é feita por um sensor simulado conectado ao pino A3, utilizando o canal ADC3 do ATmega328P.
+
+O ADC lê valores de 0 a 1023. No código, essa leitura é convertida para uma escala física de 0°C a 110°C.
+
+A temperatura usada no processo é calculada da seguinte forma:
+
+Temperatura do processo = temperatura do sensor × 10
 
 Exemplo:
 
-```text
 Sensor = 66°C
-Temperatura simulada = 660°C
-```
+Temperatura do processo = 660°C
+
+Essa multiplicação permite simular temperaturas maiores de fundição usando uma faixa menor de leitura no Proteus.
 
 ## Soft starter
 
-A resistência em D13 não liga diretamente em nível alto contínuo. O código usa um soft starter por software, aumentando gradualmente o acionamento em pulsos com base no Timer1.
+A resistência de aquecimento é acionada pelo pino D13, mas ela não liga diretamente em potência máxima.
+
+O código utiliza um soft starter por software, baseado no Timer1. O acionamento começa com pulsos menores e aumenta gradualmente até atingir o acionamento total. Isso simula uma partida mais suave da resistência e evita uma ativação brusca do aquecimento.
 
 ## Máquina de estados
 
 ![Mapa de estados](images/mapa-de-estados.png)
 
-Estados usados no firmware:
+O firmware é controlado por uma máquina de estados, que organiza cada etapa do funcionamento do forno.
 
-- INICIO
-- CONFIGURACAO
-- CONFIRMAR_INICIO
-- PRE_AQUECIMENTO
-- AQUECIMENTO
-- PATAMAR
-- RESFRIAMENTO
-- FINALIZADO
-- MODO_MANUAL
-- ERRO
+- Estados usados no projeto:
+
+INICIO: exibe a mensagem inicial e prepara o sistema.
+CONFIGURACAO: permite selecionar o perfil e ajustar os parâmetros.
+CONFIRMAR_INICIO: aguarda a confirmação para iniciar o processo.
+PRE_AQUECIMENTO: realiza o aquecimento inicial.
+AQUECIMENTO: aquece até a temperatura alvo ou até finalizar o tempo fixo.
+PATAMAR: mantém a temperatura próxima do valor configurado.
+RESFRIAMENTO: desliga a resistência e aguarda o resfriamento natural.
+FINALIZADO: indica que o processo terminou.
+MODO_MANUAL: permite controlar a resistência pelo potenciômetro em A4.
+ERRO: estado acionado pela emergência, desligando imediatamente a resistência.
 
 ## Pinagem
 
@@ -139,10 +160,6 @@ Estados usados no firmware:
 
 A UART usa 9600 baud, 8 bits, sem paridade e 1 stop bit. Para usar o Virtual Terminal no Proteus:
 
-- TX do Arduino D1 / PD1 -> RXD do Virtual Terminal
-- RX do Arduino D0 / PD0 -> TXD do Virtual Terminal
-- GND comum
-
 | Comando | Função |
 |---|---|
 | U | Mais |
@@ -160,7 +177,7 @@ STATUS Modo=AQUECENDO Temp=660°C Alvo=660°C
 
 ## Simulação no Proteus
 
-![Circuito no Proteus](images/circuito-proteus.png)
+<img width="669" height="462" alt="image" src="https://github.com/user-attachments/assets/554cb732-5cd3-4950-a495-03206e695fe3" />
 
 O projeto foi preparado para simulação no Proteus usando ATmega328P/Arduino UNO, LCD 16x2, botões, LEDs, potenciômetros, terminal virtual e circuito de acionamento da resistência.
 
@@ -201,7 +218,4 @@ Também existe o script `build.ps1` para compilar com `avr-gcc`, caso o toolchai
 10. Testar emergência em D12.
 11. Ver LEDs.
 
-## Autores
 
-- Nome 1
-- Nome 2
