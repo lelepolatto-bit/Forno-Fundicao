@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forno de Fundição Programável</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <p class="eyebrow">ATmega328P · C AVR · Proteus</p>
+    <h1>Forno de Fundição Programável</h1>
+    <p>Projeto didático com LCD 16x2, botões, UART, ADC, Timer1, máquina de estados, emergência e soft starter.</p>
+    <nav>
+      <a href="https://github.com/lelepolatto-bit/forno-fundicao-atmega328p">GitHub</a>
+      <a href="../docs/relatorio.md">Relatório</a>
+    </nav>
+  </header>
+
+  <main>
+    <section>
+      <h2>Simulação no Proteus</h2>
+      <figure>
+        <img src="../images/circuito-proteus.png" alt="Circuito do forno no Proteus">
+        <figcaption>Print do circuito: colocar em images/circuito-proteus.png.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>Máquina de estados</h2>
+      <figure>
+        <img src="../images/mapa-de-estados.png" alt="Mapa de estados do forno">
+      </figure>
+    </section>
+
+    <section class="grid">
+      <article>
+        <h2>Perfis</h2>
+        <table>
+          <tr><th>Perfil</th><th>Alvo</th><th>Modo</th></tr>
+          <tr><td>Alumínio</td><td>660°C</td><td>Automático</td></tr>
+          <tr><td>Latão</td><td>930°C</td><td>Automático</td></tr>
+          <tr><td>Personalizado</td><td>50 em 50°C</td><td>Automático</td></tr>
+          <tr><td>Manual</td><td>A4</td><td>Proporcional</td></tr>
+        </table>
+      </article>
+
+      <article>
+        <h2>LEDs</h2>
+        <table>
+          <tr><th>LED</th><th>Pino</th><th>Função</th></tr>
+          <tr><td>Aquecimento</td><td>A0</td><td>Resistência ativa</td></tr>
+          <tr><td>Finalizado</td><td>A1</td><td>Processo finalizado</td></tr>
+          <tr><td>Resfriando</td><td>A2</td><td>Resfriamento natural</td></tr>
+          <tr><td>Emergência</td><td>A5</td><td>Pisca em erro</td></tr>
+        </table>
+      </article>
+    </section>
+
+    <section>
+      <h2>Pinagem</h2>
+      <table>
+        <tr><th>Função</th><th>Arduino</th><th>ATmega328P</th></tr>
+        <tr><td>LCD RS/E/D4-D7</td><td>D2-D7</td><td>PD2-PD7</td></tr>
+        <tr><td>Voltar/Enter/Menos/Mais</td><td>D8-D11</td><td>PB0-PB3</td></tr>
+        <tr><td>Emergência</td><td>D12</td><td>PB4</td></tr>
+        <tr><td>Resistência</td><td>D13</td><td>PB5</td></tr>
+        <tr><td>Sensor</td><td>A3</td><td>ADC3 / PC3</td></tr>
+        <tr><td>Potenciômetro manual</td><td>A4</td><td>ADC4 / PC4</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>Funcionamento</h2>
+      <ol>
+        <li>O sistema inicia e mostra a tela de boas-vindas.</li>
+        <li>O usuário seleciona perfil e tempo de patamar.</li>
+        <li>O forno executa pré-aquecimento, aquecimento e patamar.</li>
+        <li>O resfriamento é natural e acompanhado pelo sensor.</li>
+        <li>A emergência em D12 interrompe o sistema e trava o erro até confirmação.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>
