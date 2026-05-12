@@ -180,12 +180,6 @@ STATUS Modo=AQUECENDO Temp=660°C Alvo=660°C
 
 O projeto foi preparado para simulação no Proteus usando ATmega328P/Arduino UNO, LCD 16x2, botões, LEDs, potenciômetros, terminal virtual e circuito de acionamento da resistência.
 
-O print do circuito ainda deve ser colocado em:
-
-```text
-images/circuito-proteus.png
-docs/circuito-proteus.png
-```
 
 ## Como compilar
 
