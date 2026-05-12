@@ -100,7 +100,7 @@ O código utiliza um soft starter por software, baseado no Timer1. O acionamento
 
 O firmware é controlado por uma máquina de estados, que organiza cada etapa do funcionamento do forno.
 
-- Estados usados no projeto:
+Estados usados no projeto:
 
 INICIO: exibe a mensagem inicial e prepara o sistema.
 CONFIGURACAO: permite selecionar o perfil e ajustar os parâmetros.
