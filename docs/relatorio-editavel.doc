@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Relatório - Forno de Fundição Programável</title>
+<style>
+body { font-family: Arial, sans-serif; color: #222; line-height: 1.45; }
+h1 { color: #8b2d1f; }
+h2 { color: #333; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+th, td { border: 1px solid #999; padding: 6px 8px; text-align: left; }
+th { background: #eee; }
+img { max-width: 100%; height: auto; border: 1px solid #ccc; }
+code, pre { background: #f2f2f2; padding: 4px; }
+</style>
+</head>
+<body>
+<h1>Relatório - Forno de Fundição Programável com ATmega328P</h1>
+
+<h2>1. Identificação do projeto</h2>
+<p><strong>Projeto:</strong> Forno de Fundição Programável com ATmega328P</p>
+<p><strong>Plataforma:</strong> ATmega328P / Arduino UNO em simulação Proteus</p>
+<p><strong>Linguagem:</strong> C para AVR usando registradores</p>
+<p><strong>GitHub:</strong> <a href="https://github.com/lelepolatto-bit/forno-fundicao-atmega328p">https://github.com/lelepolatto-bit/forno-fundicao-atmega328p</a></p>
+
+<h2>2. Objetivo</h2>
+<p>O objetivo do projeto é simular o controle de um forno de fundição didático. O sistema permite selecionar perfis de material, controlar uma resistência, ler temperatura por sensor simulado, usar modo manual, acompanhar informações no LCD e na UART, além de parar o processo por emergência.</p>
+
+<h2>3. Funcionamento geral</h2>
+<p>Ao iniciar, o LCD mostra a tela de boas-vindas. Depois o usuário seleciona Alumínio, Latão, Personalizado ou Modo manual. Nos perfis automáticos, o sistema passa por pré-aquecimento, aquecimento, patamar, resfriamento natural e finalização.</p>
+
+<h2>4. Perfis disponíveis</h2>
+<table>
+<tr><th>Perfil</th><th>Temperatura alvo</th><th>Funcionamento</th></tr>
+<tr><td>Alumínio</td><td>660°C</td><td>Automático</td></tr>
+<tr><td>Latão</td><td>930°C</td><td>Automático</td></tr>
+<tr><td>Personalizado</td><td>Ajustável de 50 em 50°C</td><td>Automático</td></tr>
+<tr><td>Modo manual</td><td>Potenciômetro A4</td><td>Controle proporcional</td></tr>
+</table>
+
+<h2>5. Sensor e modo manual</h2>
+<p>O sensor de temperatura fica em A3/ADC3. A leitura física de 0°C a 110°C é multiplicada por 10 para formar a temperatura simulada do forno.</p>
+<p>No modo manual, A4/ADC4 controla proporcionalmente a resistência em D13. A3 continua sendo apenas o sensor de temperatura. O LED A0 permanece aceso enquanto o modo manual estiver ativo.</p>
+
+<h2>6. Patamar</h2>
+<p>No patamar, o LCD mostra a temperatura alvo e a contagem do tempo, por exemplo:</p>
+<pre>Patamar 660°C
+3s / 10s</pre>
+<p>A resistência em D13 permanece ligada e o LED de aquecimento A0 fica aceso até o fim do patamar.</p>
+
+<h2>7. Máquina de estados</h2>
+<p><img src="mapa-de-estados.png" alt="Mapa de estados"></p>
+<p>Estados principais: INICIO, CONFIGURACAO, CONFIRMAR_INICIO, PRE_AQUECIMENTO, AQUECIMENTO, PATAMAR, RESFRIAMENTO, FINALIZADO, MODO_MANUAL e ERRO.</p>
+
+<h2>8. Desenho do circuito no Proteus</h2>
+<p><img src="circuito-proteus.png" alt="Desenho do circuito no Proteus"></p>
+
+<h2>9. Pinagem</h2>
+<table>
+<tr><th>Função</th><th>Arduino</th><th>ATmega328P</th></tr>
+<tr><td>LCD RS</td><td>D2</td><td>PD2</td></tr>
+<tr><td>LCD E</td><td>D3</td><td>PD3</td></tr>
+<tr><td>LCD D4-D7</td><td>D4-D7</td><td>PD4-PD7</td></tr>
+<tr><td>Voltar/Enter/Menos/Mais</td><td>D8-D11</td><td>PB0-PB3</td></tr>
+<tr><td>Emergência</td><td>D12</td><td>PB4</td></tr>
+<tr><td>Resistência</td><td>D13</td><td>PB5</td></tr>
+<tr><td>LEDs</td><td>A0/A1/A2/A5</td><td>PC0/PC1/PC2/PC5</td></tr>
+<tr><td>Sensor</td><td>A3</td><td>ADC3 / PC3</td></tr>
+<tr><td>Potenciômetro manual</td><td>A4</td><td>ADC4 / PC4</td></tr>
+</table>
+
+<h2>10. UART</h2>
+<p>A UART usa 9600 baud. Exemplo de status:</p>
+<pre>STATUS Modo=AQUECENDO Temp=660°C Alvo=660°C</pre>
+
+<h2>11. Conclusão</h2>
+<p>O projeto usa registradores do ATmega328P para integrar LCD, botões, UART, ADC, timers, LEDs, emergência e controle de resistência. A simulação permite demonstrar o funcionamento automático e manual do forno de fundição.</p>
+
+<h2>12. Links</h2>
+<p>GitHub: <a href="https://github.com/lelepolatto-bit/forno-fundicao-atmega328p">https://github.com/lelepolatto-bit/forno-fundicao-atmega328p</a></p>
+<p>GitHub Pages: <a href="https://lelepolatto-bit.github.io/forno-fundicao-atmega328p/">https://lelepolatto-bit.github.io/forno-fundicao-atmega328p/</a></p>
+</body>
+</html>

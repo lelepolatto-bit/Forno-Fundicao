@@ -2,22 +2,39 @@
 #include "LCDPRINCIPALS.h"
 #include "FORNO_CONFIG.h"
 
-SystemState currentState = STATE_START;
-SystemState previousState = STATE_START;
+volatile SystemState currentState = STATE_START;
+volatile SystemState previousState = STATE_START;
 ProcessConfig currentConfig;
 uint8_t configStep = 0U, lcdNeedsUpdate = 1U;
-uint16_t sensorTemperatureC = 25U, currentTemperatureC = 250U;
-uint8_t emergencyActive = 0U, sensorFailure = 0U, processRunning = 0U;
-uint8_t heaterActive = 0U, heaterRequest = 0U, manualPowerPercent = 0U;
+volatile uint16_t sensorTemperatureC = 25U, currentTemperatureC = 250U;
+volatile uint8_t emergencyActive = 0U, sensorFailure = 0U, processRunning = 0U;
+volatile uint8_t heaterActive = 0U, heaterRequest = 0U, manualPowerPercent = 0U;
 volatile uint32_t systemTicks100ms = 0UL, systemSeconds = 0UL;
 static uint32_t stateStartSeconds = 0UL, welcomeStartSeconds = 0UL;
 static uint32_t softStartLastTick = 0UL, lastLcdProcessTick = 0UL, lastUartStatusSeconds = 0UL;
-static uint8_t finishedLedLatched = 0U, emergencyLatched = 0U, softStartDuty = 0U;
+static uint32_t lastTemperatureUpdateTick = 0UL;
+static volatile uint8_t emergencyLatched = 0U;
+static uint8_t finishedLedLatched = 0U, softStartDuty = 0U;
 
 ISR(TIMER1_COMPA_vect)
 {
     systemTicks100ms++;
     if ((systemTicks100ms % 10U) == 0U) { systemSeconds++; }
+}
+
+ISR(TIMER2_COMPA_vect)
+{
+    static uint8_t manualPwmCounter = 0U;
+    if (currentState != STATE_MANUAL_MODE) { return; }
+    if (emergencyLatched || emergencyActive || sensorFailure) {
+        clearBit(PORTB, HEATER_PIN);
+        heaterActive = 0U;
+        return;
+    }
+    manualPwmCounter++;
+    if (manualPwmCounter >= 100U) { manualPwmCounter = 0U; }
+    if (manualPwmCounter < manualPowerPercent) { setBit(PORTB, HEATER_PIN); heaterActive = 1U; }
+    else { clearBit(PORTB, HEATER_PIN); heaterActive = 0U; }
 }
 
 static uint32_t getSystemSeconds(void)
@@ -80,8 +97,18 @@ void timer1Init(void)
     TIMSK1 |= (1U << OCIE1A);
 }
 
+void manualPwmTimerInit(void)
+{
+    TCCR2A = 0U; TCCR2B = 0U; TCNT2 = 0U; OCR2A = 199U;
+    TCCR2A |= (1U << WGM21);
+    TCCR2B |= (1U << CS21);
+    TIMSK2 |= (1U << OCIE2A);
+}
+
 void adcInit(void)
 {
+    clearBit(DDRC, PC4);
+    clearBit(PORTC, PC4);
     ADMUX = (uint8_t)(1U << REFS0);
     ADCSRA = (uint8_t)((1U << ADEN) | (1U << ADPS2) | (1U << ADPS1) | (1U << ADPS0));
     DIDR0 |= (uint8_t)((1U << ADC3D) | (1U << ADC4D));
@@ -141,8 +168,10 @@ void updateHeaterControl(void)
     if ((currentState == STATE_PREHEATING) || (currentState == STATE_HEATING)) {
         if (currentTemperatureC < currentConfig.targetTemperatureC) { heaterOn(); } else { heaterOff(); }
     } else if (currentState == STATE_SOAKING) {
-        if (currentTemperatureC < (uint16_t)(currentConfig.targetTemperatureC - HYSTERESIS_C)) { heaterOn(); }
-        else if (currentTemperatureC > (uint16_t)(currentConfig.targetTemperatureC + HYSTERESIS_C)) { heaterOff(); }
+        heaterRequest = 1U;
+        softStartDuty = 100U;
+        setBit(PORTB, HEATER_PIN);
+        heaterActive = 1U;
     } else {
         heaterOff();
     }
@@ -151,10 +180,21 @@ void updateHeaterControl(void)
 static void applySoftStarter(void)
 {
     uint32_t nowTicks = getSystemTicks100ms();
-    uint8_t windowPosition, onTicks;
     if ((!heaterRequest) || emergencyLatched || emergencyActive || sensorFailure ||
-        (sensorTemperatureC >= MAX_SENSOR_HEATING_C) || (currentState == STATE_ERROR) ||
+        (currentState == STATE_ERROR) ||
         (currentState == STATE_COOLING) || (currentState == STATE_FINISHED) || (currentState == STATE_START)) {
+        clearBit(PORTB, HEATER_PIN);
+        heaterActive = 0U; heaterRequest = 0U; softStartDuty = 0U;
+        return;
+    }
+    if (currentState == STATE_SOAKING) {
+        setBit(PORTB, HEATER_PIN);
+        heaterActive = 1U;
+        heaterRequest = 1U;
+        softStartDuty = 100U;
+        return;
+    }
+    if (sensorTemperatureC >= MAX_SENSOR_HEATING_C) {
         clearBit(PORTB, HEATER_PIN);
         heaterActive = 0U; heaterRequest = 0U; softStartDuty = 0U;
         return;
@@ -166,31 +206,19 @@ static void applySoftStarter(void)
             if (softStartDuty > 100U) { softStartDuty = 100U; }
         }
     }
-    windowPosition = (uint8_t)(nowTicks % SOFT_START_WINDOW_TICKS);
-    onTicks = (uint8_t)((softStartDuty * SOFT_START_WINDOW_TICKS) / 100U);
-    if (windowPosition < onTicks) { setBit(PORTB, HEATER_PIN); heaterActive = 1U; }
+    if (softStartDuty >= 100U) { setBit(PORTB, HEATER_PIN); heaterActive = 1U; }
     else { clearBit(PORTB, HEATER_PIN); heaterActive = 0U; }
 }
 
 static void updateManualHeaterControl(void)
 {
-    uint8_t windowPosition, onTicks;
     manualPowerPercent = readManualPowerPercent();
-    if (emergencyLatched || emergencyActive || sensorFailure ||
-        (sensorTemperatureC >= MAX_SENSOR_HEATING_C) || (currentState == STATE_ERROR)) {
+    if (emergencyLatched || emergencyActive || sensorFailure || (currentState == STATE_ERROR)) {
         heaterOff();
         return;
     }
     heaterRequest = 0U; softStartDuty = 0U;
-    if (manualPowerPercent == 0U) {
-        clearBit(PORTB, HEATER_PIN);
-        heaterActive = 0U;
-        return;
-    }
-    windowPosition = (uint8_t)(getSystemTicks100ms() % MANUAL_PWM_WINDOW_TICKS);
-    onTicks = (uint8_t)((manualPowerPercent * MANUAL_PWM_WINDOW_TICKS) / 100U);
-    if (windowPosition < onTicks) { setBit(PORTB, HEATER_PIN); heaterActive = 1U; }
-    else { clearBit(PORTB, HEATER_PIN); heaterActive = 0U; }
+    if (manualPowerPercent == 0U) { clearBit(PORTB, HEATER_PIN); heaterActive = 0U; }
 }
 
 void ledsInit(void)
@@ -210,7 +238,12 @@ void updateLeds(void)
         return;
     }
     clearBit(PORTC, LED_EMERGENCY);
-    if (heaterActive) { setBit(PORTC, LED_HEATING); } else { clearBit(PORTC, LED_HEATING); }
+    if ((currentState == STATE_PREHEATING) || (currentState == STATE_HEATING) ||
+        (currentState == STATE_SOAKING) || (currentState == STATE_MANUAL_MODE)) {
+        setBit(PORTC, LED_HEATING);
+    } else {
+        clearBit(PORTC, LED_HEATING);
+    }
     if (finishedLedLatched) { setBit(PORTC, LED_FINISHED); } else { clearBit(PORTC, LED_FINISHED); }
     if (currentState == STATE_COOLING) { setBit(PORTC, LED_COOLING); } else { clearBit(PORTC, LED_COOLING); }
 }
@@ -625,16 +658,21 @@ uint8_t uartReadEvents(void)
 int main(void)
 {
     initLCD(); buttonsInit(); safetyButtonInit(); uartInit();
-    timer1Init(); adcInit(); heaterInit(); ledsInit();
+    timer1Init(); manualPwmTimerInit(); adcInit(); heaterInit(); ledsInit();
     sei();
     applyProfile(PROFILE_ALUMINUM);
     showWelcomeScreen();
     welcomeStartSeconds = getSystemSeconds();
+    updateTemperature();
+    lastTemperatureUpdateTick = getSystemTicks100ms();
     while (1) {
         uint8_t events = readButtonEvents();
         events |= uartReadEvents();
         updateSafetyInput();
-        updateTemperature();
+        if ((getSystemTicks100ms() - lastTemperatureUpdateTick) >= 1UL) {
+            lastTemperatureUpdateTick = getSystemTicks100ms();
+            updateTemperature();
+        }
         if ((getSystemSeconds() - lastUartStatusSeconds) >= 1U) { lastUartStatusSeconds = getSystemSeconds(); sendStatusUART(); }
         if (emergencyActive) {
             emergencyLatched = 1U;

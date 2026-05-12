@@ -4,26 +4,80 @@
 
 Projeto: Forno de Fundição Programável com ATmega328P  
 Plataforma: ATmega328P / Arduino UNO em simulação Proteus  
-Linguagem: C para AVR, usando registradores
+Linguagem: C para AVR usando registradores  
+Repositório: <https://github.com/lelepolatto-bit/forno-fundicao-atmega328p>
 
 ## 2. Objetivo
 
-Desenvolver um sistema embarcado didático para controlar um forno de fundição programável. O projeto simula seleção de perfis, leitura de temperatura, aquecimento, patamar, resfriamento natural, emergência, LEDs, LCD e UART.
+O objetivo do projeto é simular o controle de um forno de fundição didático. O sistema permite selecionar perfis de material, controlar uma resistência, ler temperatura por sensor simulado, usar modo manual, acompanhar informações no LCD e na UART, além de parar o processo por emergência.
 
-## 3. Integrantes
+## 3. Funcionamento geral
 
-- Nome 1
-- Nome 2
+Ao iniciar, o LCD mostra a tela de boas-vindas. Depois o usuário seleciona um perfil:
 
-## 4. Funcionamento
+- Alumínio
+- Latão
+- Personalizado
+- Modo manual
 
-O sistema inicia exibindo uma mensagem de boas-vindas no LCD. Em seguida, permite selecionar o perfil do processo: Alumínio, Latão, Personalizado ou Modo manual.
+Nos perfis Alumínio e Latão, a temperatura alvo já vem definida. No perfil Personalizado, o usuário ajusta a temperatura alvo de 50 em 50°C. Em todos os processos automáticos, o usuário define o tempo de patamar.
 
-Nos perfis automáticos, o sistema usa a temperatura alvo pré-configurada. No perfil personalizado, o usuário ajusta a temperatura alvo de 50 em 50°C. O tempo de patamar é configurado pelo usuário e o tempo de aquecimento é fixo.
+Após a confirmação, o sistema passa por pré-aquecimento, aquecimento, patamar, resfriamento natural e finalização. A emergência em D12 interrompe o sistema, desliga a resistência e trava o estado de erro até o usuário liberar o botão e confirmar.
 
-Durante o processo, o Timer1 controla a contagem de tempo, o ADC lê o sensor de temperatura em A3, e o controle da resistência usa soft starter por software.
+## 4. Perfis disponíveis
 
-## 5. Máquina de estados
+| Perfil | Temperatura alvo | Funcionamento |
+|---|---:|---|
+| Alumínio | 660°C | Automático |
+| Latão | 930°C | Automático |
+| Personalizado | Ajustável de 50 em 50°C | Automático |
+| Modo manual | Potenciômetro A4 | Controle proporcional |
+
+## 5. Sensor de temperatura
+
+O sensor de temperatura é simulado por um potenciômetro no pino A3, canal ADC3. O ADC lê de 0 a 1023, representando uma temperatura física de 0°C a 110°C.
+
+No programa, a temperatura do processo é calculada multiplicando a temperatura física por 10:
+
+```text
+sensorTemperatureC = leitura convertida de A3
+currentTemperatureC = sensorTemperatureC x 10
+```
+
+Exemplo:
+
+```text
+Sensor A3 = 66°C
+Temperatura simulada do forno = 660°C
+```
+
+## 6. Modo manual
+
+No modo manual, o potenciômetro em A4 controla proporcionalmente a resistência em D13. O sensor em A3 continua sendo apenas sensor de temperatura e não altera a potência manual.
+
+Durante o modo manual:
+
+- A4 controla a luminosidade/potência da resistência.
+- A3 altera somente a temperatura exibida.
+- O LED de estado de aquecimento em A0 fica aceso enquanto o modo manual estiver ativo.
+- ENTER sai do modo manual e envia o sistema para resfriamento.
+
+## 7. Patamar
+
+No estado de patamar, o LCD mostra a temperatura do patamar na primeira linha e a contagem de tempo na segunda linha:
+
+```text
+Patamar 660°C
+3s / 10s
+```
+
+Durante o patamar, a saída da resistência em D13 permanece ligada e o LED de aquecimento A0 permanece aceso até o fim do patamar. Ao terminar o tempo configurado, o sistema vai para resfriamento natural.
+
+## 8. Soft starter
+
+No modo automático, a resistência não é liberada diretamente no início. O programa usa uma rampa por software antes de manter a saída da resistência ligada. Isso evita ligar a carga de forma brusca na simulação.
+
+## 9. Máquina de estados
 
 ![Mapa de estados](mapa-de-estados.png)
 
@@ -40,7 +94,13 @@ Estados principais:
 - MODO_MANUAL
 - ERRO
 
-## 6. Pinagem
+## 10. Desenho do circuito no Proteus
+
+![Desenho do Proteus](circuito-proteus.png)
+
+O circuito usa LCD 16x2, botões físicos, LEDs, potenciômetros para sensor e modo manual, saída para resistência e terminal virtual para UART.
+
+## 11. Pinagem
 
 | Função | Arduino | ATmega328P |
 |---|---|---|
@@ -59,58 +119,65 @@ Estados principais:
 | LED Aquecimento | A0 | PC0 |
 | LED Finalizado | A1 | PC1 |
 | LED Resfriando | A2 | PC2 |
-| Sensor temperatura | A3 | ADC3 / PC3 |
+| Sensor de temperatura | A3 | ADC3 / PC3 |
 | Potenciômetro manual | A4 | ADC4 / PC4 |
 | LED Emergência | A5 | PC5 |
 
-## 7. Circuito no Proteus
+## 12. UART
 
-O arquivo de simulação está em:
+A UART opera em 9600 baud. A ligação no Proteus deve ser:
+
+- TX do Arduino D1 / PD1 no RXD do Virtual Terminal.
+- RX do Arduino D0 / PD0 no TXD do Virtual Terminal.
+- GND comum.
+
+Comandos:
+
+| Comando | Função |
+|---|---|
+| U | Mais |
+| D | Menos |
+| E | Enter |
+| B | Voltar |
+| S | Status |
+| X | Emergência |
+
+Exemplo de status:
 
 ```text
-simulation/proteus/forno-fundicao.pdsprj
+STATUS Modo=AQUECENDO Temp=660°C Alvo=660°C
 ```
 
-O print do circuito deve ser colocado em:
+## 13. Arquivos do firmware
 
-```text
-docs/circuito-proteus.png
-images/circuito-proteus.png
-```
+| Arquivo | Função |
+|---|---|
+| firmware/main.c | Loop principal, máquina de estados, ADC, UART, Timer, botões, LEDs e aquecimento |
+| firmware/LCDlibrary.c | Biblioteca do LCD 16x2 |
+| firmware/PRINCIPALS.h | Includes principais e macros de bit |
+| firmware/LCDPRINCIPALS.h | Pinagem e protótipos do LCD |
+| firmware/FORNO_CONFIG.h | Defines, enums, struct e mensagens em PROGMEM |
 
-## 8. Explicação do código
-
-O firmware está na pasta `firmware/`.
-
-- `main.c`: inicialização, loop principal, máquina de estados, UART, ADC, Timer1, botões, LEDs e controle do aquecimento.
-- `LCDlibrary.c`: biblioteca do LCD 16x2 em modo 4 bits.
-- `PRINCIPALS.h`: frequência, includes e macros de bit.
-- `LCDPRINCIPALS.h`: pinagem e protótipos da biblioteca LCD.
-- `FORNO_CONFIG.h`: defines, enums, struct e mensagens em PROGMEM.
-
-O sistema não usa Arduino API. A leitura de botões, UART, ADC, Timer1 e acionamentos são feitos por registradores AVR.
-
-## 9. Testes
+## 14. Testes realizados
 
 Checklist de validação:
 
 1. LCD mostra a tela inicial.
 2. Botões D8 a D11 navegam corretamente.
-3. A seleção de perfil funciona.
-4. O perfil personalizado altera temperatura de 50 em 50°C.
-5. O tempo de patamar aparece no LCD e conta em segundos.
-6. O sensor A3 altera a temperatura exibida.
-7. A resistência em D13 aciona com soft starter.
-8. O modo manual usa potenciômetro em A4.
-9. A emergência em D12 trava o sistema em erro.
-10. O LED A5 pisca durante emergência.
-11. A UART imprime status automaticamente.
+3. Perfis Alumínio, Latão, Personalizado e Manual aparecem.
+4. Personalizado ajusta temperatura de 50 em 50°C.
+5. Patamar mostra tempo decorrido e tempo total.
+6. A3 altera somente a temperatura.
+7. A4 controla a resistência no modo manual.
+8. LED A0 fica aceso no aquecimento, patamar e modo manual.
+9. Emergência em D12 desliga a resistência e aciona erro.
+10. UART mostra modo e temperatura.
 
-## 10. Conclusão
+## 15. Conclusão
 
-O projeto atende ao objetivo de simular um forno de fundição didático com controle embarcado em ATmega328P. A implementação usa recursos básicos de sistemas embarcados em C AVR, mantendo separação entre firmware, simulação, documentação e página de apresentação.
+O projeto simula um forno de fundição programável usando recursos básicos de sistemas embarcados em C AVR. O firmware trabalha com registradores do ATmega328P, máquina de estados, Timer1, Timer2, ADC, UART, LCD, botões e LEDs, mantendo uma estrutura organizada para simulação e apresentação.
 
-## 11. Links
+## 16. Links
 
-- Repositório GitHub: será inserido após publicação.
-- GitHub Pages: será inserido após ativação.
+- GitHub: <https://github.com/lelepolatto-bit/forno-fundicao-atmega328p>
+- GitHub Pages: <https://lelepolatto-bit.github.io/forno-fundicao-atmega328p/>
