@@ -66,7 +66,6 @@ Durante esse modo, o sensor de temperatura no pino A3 continua sendo lido em tem
 
 A tela do LCD mostra:
 
-```text
 Modo manual
 Temp: xx°C
 
