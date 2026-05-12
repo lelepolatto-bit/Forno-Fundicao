@@ -6,12 +6,13 @@ volatile SystemState currentState = STATE_START;
 volatile SystemState previousState = STATE_START;
 ProcessConfig currentConfig;
 uint8_t configStep = 0U, lcdNeedsUpdate = 1U;
+uint8_t uartNeedsUpdate = 1U;
 volatile uint16_t sensorTemperatureC = 25U, currentTemperatureC = 250U;
 volatile uint8_t emergencyActive = 0U, sensorFailure = 0U, processRunning = 0U;
 volatile uint8_t heaterActive = 0U, heaterRequest = 0U, manualPowerPercent = 0U;
 volatile uint32_t systemTicks100ms = 0UL, systemSeconds = 0UL;
 static uint32_t stateStartSeconds = 0UL, welcomeStartSeconds = 0UL;
-static uint32_t softStartLastTick = 0UL, lastLcdProcessTick = 0UL, lastUartStatusSeconds = 0UL;
+static uint32_t softStartLastTick = 0UL, lastLcdProcessTick = 0UL;
 static uint32_t lastTemperatureUpdateTick = 0UL;
 static volatile uint8_t emergencyLatched = 0U;
 static uint8_t finishedLedLatched = 0U, softStartDuty = 0U;
@@ -312,6 +313,85 @@ void sendStatusUART(void)
     uartPrintFlash(uartNewLine);
 }
 
+static void uartPrintProfile(MaterialProfile profile)
+{
+    switch (profile) {
+    case PROFILE_ALUMINUM: uartPrintFlash(PSTR("Aluminio")); break;
+    case PROFILE_BRASS: uartPrintFlash(PSTR("Latao")); break;
+    case PROFILE_MANUAL: uartPrintFlash(PSTR("Modo manual")); break;
+    default: uartPrintFlash(PSTR("Personalizado")); break;
+    }
+}
+
+static void sendSerialScreen(void)
+{
+    uartPrintFlash(PSTR("\r\n===== DISPLAY SERIAL =====\r\n"));
+    switch (currentState) {
+    case STATE_START:
+        uartPrintFlash(PSTR("Bem vindo :)\r\nForno Fundicao\r\n"));
+        break;
+    case STATE_CONFIGURATION:
+        if (configStep == CONFIG_STEP_PROFILE) {
+            uartPrintFlash(PSTR("Selecionar perfil:\r\n1 - Aluminio\r\n2 - Latao\r\n3 - Personalizado\r\n4 - Modo manual\r\nAtual: "));
+            uartPrintProfile(currentConfig.profile);
+            uartPrintFlash(PSTR("\r\nUse 1/2/3/4 ou U/D. E confirma.\r\n"));
+        } else if (configStep == CONFIG_STEP_PROFILE_TEMP) {
+            uartPrintProfile(currentConfig.profile);
+            uartPrintFlash(PSTR("\r\nAlvo: "));
+            uartPrintTemperature(currentConfig.targetTemperatureC);
+            uartPrintFlash(PSTR("\r\nE continua. B volta.\r\n"));
+        } else if (configStep == CONFIG_STEP_TARGET) {
+            uartPrintFlash(PSTR("Temp alvo:\r\nAtual: "));
+            uartPrintTemperature(currentConfig.targetTemperatureC);
+            uartPrintFlash(PSTR("\r\nU aumenta 50C. D diminui 50C. E confirma.\r\n"));
+        } else {
+            uartPrintFlash(PSTR("Tempo patamar:\r\nAtual: "));
+            uartPrintUInt16(currentConfig.soakingTimeS);
+            uartPrintFlash(PSTR("s\r\nU aumenta 10s. D diminui 10s. E confirma.\r\n"));
+        }
+        break;
+    case STATE_START_CONFIRMATION:
+        uartPrintFlash(PSTR("Iniciar?\r\nE iniciar. B voltar.\r\n"));
+        break;
+    case STATE_PREHEATING:
+        uartPrintFlash(PSTR("Pre-aquecendo\r\nTemp: "));
+        uartPrintTemperature(currentTemperatureC);
+        uartPrintFlash(PSTR("\r\n"));
+        break;
+    case STATE_HEATING:
+        uartPrintFlash(PSTR("Aquecendo\r\nTemp/Alvo: "));
+        uartPrintTemperature(currentTemperatureC);
+        uartPrintFlash(PSTR(" / "));
+        uartPrintTemperature(currentConfig.targetTemperatureC);
+        uartPrintFlash(PSTR("\r\n"));
+        break;
+    case STATE_SOAKING:
+        uartPrintFlash(PSTR("Patamar "));
+        uartPrintTemperature(currentConfig.targetTemperatureC);
+        uartPrintFlash(PSTR("\r\nTempo configurado: "));
+        uartPrintUInt16(currentConfig.soakingTimeS);
+        uartPrintFlash(PSTR("s\r\n"));
+        break;
+    case STATE_COOLING:
+        uartPrintFlash(PSTR("Resfriando\r\nTemp: "));
+        uartPrintTemperature(currentTemperatureC);
+        uartPrintFlash(PSTR("\r\nE volta ao inicio.\r\n"));
+        break;
+    case STATE_FINISHED:
+        uartPrintFlash(PSTR("Finalizado\r\nE reinicia.\r\n"));
+        break;
+    case STATE_MANUAL_MODE:
+        uartPrintFlash(PSTR("Modo manual\r\nTemp: "));
+        uartPrintTemperature(currentTemperatureC);
+        uartPrintFlash(PSTR("\r\nA4 controla a resistencia. E resfriar.\r\n"));
+        break;
+    default:
+        uartPrintFlash(PSTR("EMERGENCIA\r\nVerifique seguranca. E reinicia quando liberado.\r\n"));
+        break;
+    }
+    uartPrintFlash(PSTR("==========================\r\n"));
+}
+
 void uartInit(void)
 {
     UBRR0H = (uint8_t)(UART_UBRR_VALUE >> 8);
@@ -319,7 +399,6 @@ void uartInit(void)
     UCSR0A = 0U;
     UCSR0B = (uint8_t)((1U << RXEN0) | (1U << TXEN0));
     UCSR0C = (uint8_t)((1U << UCSZ01) | (1U << UCSZ00));
-    uartPrintFlash(uartHelp);
 }
 
 uint8_t uartAvailable(void)
@@ -505,6 +584,7 @@ static void changeState(SystemState nextState)
     currentState = nextState;
     stateStartSeconds = getSystemSeconds();
     lcdNeedsUpdate = 1U;
+    uartNeedsUpdate = 1U;
     if ((nextState == STATE_START) || (nextState == STATE_ERROR) ||
         (nextState == STATE_FINISHED) || (nextState == STATE_COOLING)) { heaterOff(); }
     if ((nextState == STATE_START) || (nextState == STATE_ERROR) || (nextState == STATE_FINISHED)) { processRunning = 0U; }
@@ -531,6 +611,7 @@ static void handleConfigurationInput(uint8_t events)
             if ((configStep == CONFIG_STEP_SOAKING) && (currentConfig.profile != PROFILE_CUSTOM)) { configStep = CONFIG_STEP_PROFILE_TEMP; }
             else { configStep--; }
             lcdNeedsUpdate = 1U;
+            uartNeedsUpdate = 1U;
         }
     }
     if (events & EVENT_UP) {
@@ -538,6 +619,7 @@ static void handleConfigurationInput(uint8_t events)
         else if (configStep == CONFIG_STEP_TARGET) { currentConfig.targetTemperatureC += TARGET_TEMPERATURE_STEP_C; }
         else if (configStep == CONFIG_STEP_SOAKING) { currentConfig.soakingTimeS += SOAKING_STEP_S; }
         lcdNeedsUpdate = 1U;
+        uartNeedsUpdate = 1U;
     }
     if (events & EVENT_DOWN) {
         if (configStep == CONFIG_STEP_PROFILE) {
@@ -550,17 +632,20 @@ static void handleConfigurationInput(uint8_t events)
             currentConfig.soakingTimeS -= SOAKING_STEP_S;
         }
         lcdNeedsUpdate = 1U;
+        uartNeedsUpdate = 1U;
     }
     if (events & EVENT_ENTER) {
         if (configStep == CONFIG_STEP_PROFILE) {
             if (currentConfig.profile == PROFILE_MANUAL) { changeState(STATE_MANUAL_MODE); }
-            else { configStep = CONFIG_STEP_PROFILE_TEMP; lcdNeedsUpdate = 1U; }
+            else { configStep = CONFIG_STEP_PROFILE_TEMP; lcdNeedsUpdate = 1U; uartNeedsUpdate = 1U; }
         } else if (configStep == CONFIG_STEP_PROFILE_TEMP) {
             configStep = (currentConfig.profile == PROFILE_CUSTOM) ? CONFIG_STEP_TARGET : CONFIG_STEP_SOAKING;
             lcdNeedsUpdate = 1U;
+            uartNeedsUpdate = 1U;
         } else if (configStep == CONFIG_STEP_TARGET) {
             configStep = CONFIG_STEP_SOAKING;
             lcdNeedsUpdate = 1U;
+            uartNeedsUpdate = 1U;
         } else {
             changeState(STATE_START_CONFIRMATION);
         }
@@ -642,6 +727,18 @@ uint8_t uartReadEvents(void)
     case 'E': case 'e': events = EVENT_ENTER; break;
     case 'B': case 'b': events = EVENT_BACK; break;
     case 'S': case 's': sendStatusUART(); events = EVENT_STATUS; break;
+    case '1':
+        if ((currentState == STATE_CONFIGURATION) && (configStep == CONFIG_STEP_PROFILE)) { applyProfile(PROFILE_ALUMINUM); lcdNeedsUpdate = 1U; uartNeedsUpdate = 1U; }
+        break;
+    case '2':
+        if ((currentState == STATE_CONFIGURATION) && (configStep == CONFIG_STEP_PROFILE)) { applyProfile(PROFILE_BRASS); lcdNeedsUpdate = 1U; uartNeedsUpdate = 1U; }
+        break;
+    case '3':
+        if ((currentState == STATE_CONFIGURATION) && (configStep == CONFIG_STEP_PROFILE)) { applyProfile(PROFILE_CUSTOM); lcdNeedsUpdate = 1U; uartNeedsUpdate = 1U; }
+        break;
+    case '4':
+        if ((currentState == STATE_CONFIGURATION) && (configStep == CONFIG_STEP_PROFILE)) { applyProfile(PROFILE_MANUAL); lcdNeedsUpdate = 1U; uartNeedsUpdate = 1U; }
+        break;
     case 'X': case 'x':
         heaterOff();
         processRunning = 0U; emergencyActive = 1U; emergencyLatched = 1U;
@@ -649,7 +746,7 @@ uint8_t uartReadEvents(void)
         uartPrintFlash(uartEmergencyMsg);
         events = EVENT_EMERGENCY;
         break;
-    case 'H': case 'h': uartPrintFlash(uartHelp); break;
+    case 'H': case 'h': sendSerialScreen(); break;
     default: break;
     }
     return events;
@@ -665,6 +762,8 @@ int main(void)
     welcomeStartSeconds = getSystemSeconds();
     updateTemperature();
     lastTemperatureUpdateTick = getSystemTicks100ms();
+    sendSerialScreen();
+    uartNeedsUpdate = 0U;
     while (1) {
         uint8_t events = readButtonEvents();
         events |= uartReadEvents();
@@ -673,7 +772,6 @@ int main(void)
             lastTemperatureUpdateTick = getSystemTicks100ms();
             updateTemperature();
         }
-        if ((getSystemSeconds() - lastUartStatusSeconds) >= 1U) { lastUartStatusSeconds = getSystemSeconds(); sendStatusUART(); }
         if (emergencyActive) {
             emergencyLatched = 1U;
             heaterOff();
@@ -695,5 +793,9 @@ int main(void)
         else { updateHeaterControl(); applySoftStarter(); }
         updateLeds();
         updateLCD();
+        if (uartNeedsUpdate) {
+            sendSerialScreen();
+            uartNeedsUpdate = 0U;
+        }
     }
 }

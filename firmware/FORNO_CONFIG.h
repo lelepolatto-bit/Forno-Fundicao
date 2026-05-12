@@ -110,7 +110,16 @@ static const char lcdPatamarLabel[] PROGMEM = "Patamar ";
 
 /* Mensagens da UART */
 static const char uartHelp[] PROGMEM =
-    "Comandos: U=MAIS D=MENOS E=ENTER B=VOLTAR S=STATUS X=EMERGENCIA\r\n";
+    "\r\n===== MENU SERIAL - FORNO =====\r\n"
+    "U/u - MAIS: proximo perfil ou aumenta valor\r\n"
+    "D/d - MENOS: perfil anterior ou diminui valor\r\n"
+    "E/e - ENTER: confirma a tela atual\r\n"
+    "B/b - VOLTAR: cancela ou volta etapa\r\n"
+    "S/s - STATUS: mostra modo e temperatura\r\n"
+    "X/x - EMERGENCIA: para o sistema\r\n"
+    "H/h - MENU: mostra este menu\r\n"
+    "Use o terminal em 9600 baud.\r\n"
+    "================================\r\n";
 static const char uartStatusTitle[] PROGMEM = "STATUS ";
 static const char uartStateLabel[] PROGMEM = "Modo=";
 static const char uartTempLabel[] PROGMEM = " Temp=";
